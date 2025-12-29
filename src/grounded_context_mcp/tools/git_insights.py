@@ -1,21 +1,23 @@
 from __future__ import annotations
-
 from pathlib import Path
-
-from ..server import mcp
 from ..core.git import run_git
+from ..server import mcp
 
 
 @mcp.tool()
 def git_insights(root: str = ".") -> dict:
     """
-    Lightweight git metadata for the repo (branch, last commit, status).
+    Lightweight git metadata for the repository.
     """
     root_path = Path(root).resolve()
 
-    branch = run_git(root_path, ["rev-parse", "--abbrev-ref", "HEAD"])
-    last_commit = run_git(root_path, ["log", "-1", "--pretty=format:%h %s (%an)"])
-    status = run_git(root_path, ["status", "--porcelain"])
+    branch = run_git(root_path, ["rev-parse", "--abbrev-ref", "HEAD"], timeout_s=2.0)
+    last_commit = run_git(
+        root_path,
+        ["log", "-1", "--pretty=format:%h %s (%an)"],
+        timeout_s=2.0,
+    )
+    status = run_git(root_path, ["status", "--porcelain"], timeout_s=2.0)
 
     return {
         "root": str(root_path),
