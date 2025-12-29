@@ -20,6 +20,9 @@ _SKIP_SUBSTRINGS = (
     "\\build\\",
 )
 
+# NEW (debug-only boost): small deterministic bonus for recently changed files.
+_DEBUG_CHANGED_FILE_BOOST = 0.35
+
 
 def _norm_path(p: Path) -> str:
     """Normalize paths for cross-platform substring checks."""
@@ -27,7 +30,6 @@ def _norm_path(p: Path) -> str:
 
 
 def _should_skip(path: Path) -> bool:
-    """Skip noisy/unhelpful directories and build artifacts."""
     p = _norm_path(path)
     return any(x in p for x in _SKIP_SUBSTRINGS)
 
@@ -48,6 +50,7 @@ def _apply_intent_boosts(
     *,
     is_git_ok: bool,
     git_meta: dict,
+    changed_paths: set[str] | None = None,  # NEW
 ) -> float:
     """
     Apply intent-specific score adjustments (deterministic heuristics).
@@ -61,8 +64,16 @@ def _apply_intent_boosts(
     if intent == "debug":
         if any(k in p for k in ("auth", "middleware", "error", "exception", "logging", "trace", "bug", "fix")):
             base_score += 0.75
+
         if is_git_ok and git_meta.get("dirty"):
             base_score += 0.25
+
+        # NEW: debug-only boost for recently changed files (Context Diff Mode)
+        # We use a stable path suffix match to avoid OS separator issues.
+        if changed_paths:
+            rel_norm = str(path).replace("\\", "/")
+            if any(rel_norm.endswith(cp.replace("\\", "/")) for cp in changed_paths):
+                base_score += _DEBUG_CHANGED_FILE_BOOST
 
     elif intent == "validate":
         if any(k in p for k in ("pyproject.toml", "requirements", "environment", "docker", "compose", "config")):
@@ -86,6 +97,7 @@ def _build_why(intent: Intent, has_results: bool) -> list[str]:
     why: list[str] = []
     if intent == "debug":
         why.append("Debug intent: boosted likely hot paths and recent activity signals (when available).")
+        why.append("Debug intent: added a small boost for recently changed files (Context Diff Mode).")
     elif intent == "validate":
         why.append("Validate intent: boosted config/dependency files to check support and constraints.")
     else:
@@ -114,6 +126,65 @@ def _tokenize_query(query: str) -> list[str]:
     return [t for t in query.replace("\n", " ").split() if t]
 
 
+# --- NEW: Context Diff Mode -------------------------------------------------
+
+
+def _build_recently_changed(git_meta: dict, *, limit: int = 5) -> list[dict]:
+    """
+    Build a small, explainable "diff signal" for the caller:
+      - working tree changes first (git status)
+      - last commit changes next (git show HEAD)
+
+    Assumes git_insights provides:
+      - worktree_changed_files: list[str]
+      - last_commit_files: list[str]
+    """
+    if not isinstance(git_meta, dict) or not git_meta.get("ok", False):
+        return []
+
+    wt = git_meta.get("worktree_changed_files") or []
+    head = git_meta.get("last_commit_files") or []
+
+    seen = set()
+    merged: list[tuple[str, str]] = []
+
+    for p in wt:
+        if isinstance(p, str) and p and p not in seen:
+            seen.add(p)
+            merged.append((p, "Modified in working tree (git status)."))
+
+    for p in head:
+        if isinstance(p, str) and p and p not in seen:
+            seen.add(p)
+            merged.append((p, "Changed in last commit (git show HEAD)."))
+
+    return [{"path": p, "reason": reason} for p, reason in merged[:limit]]
+
+
+def _changed_paths_set(git_meta: dict) -> set[str]:
+    """
+    Build a stable set of changed file paths from git_meta.
+    Used only as a debug ranking hint.
+    """
+    if not isinstance(git_meta, dict) or not git_meta.get("ok", False):
+        return set()
+
+    wt = git_meta.get("worktree_changed_files") or []
+    head = git_meta.get("last_commit_files") or []
+
+    out: set[str] = set()
+    for p in wt:
+        if isinstance(p, str) and p:
+            out.add(p)
+    for p in head:
+        if isinstance(p, str) and p:
+            out.add(p)
+    return out
+
+
+# ---------------------------------------------------------------------------
+
+
 @mcp.tool()
 async def recommend_context(
     query: str,
@@ -129,7 +200,7 @@ async def recommend_context(
 
     intent:
       - implement: prefer stable patterns + file/path matches
-      - debug: boost likely hot paths (and recent activity signals if git is available)
+      - debug: boost likely hot paths and recently-changed areas (if git is available)
       - validate: prioritize env constraints and surface "unsupported" risks
     """
     root_path = Path(root).resolve()
@@ -147,6 +218,10 @@ async def recommend_context(
 
     is_git_ok = bool(git_meta.get("ok"))
 
+    # NEW: Context Diff Mode output + debug-only hint set
+    recently_changed = _build_recently_changed(git_meta, limit=5)
+    changed_paths = _changed_paths_set(git_meta) if intent == "debug" else set()
+
     # 3) PASS 1: score all files
     all_files: list[tuple[Path, str, float]] = []
     tokens = _tokenize_query(query)
@@ -158,10 +233,17 @@ async def recommend_context(
         s = sum(score_match(t, path, text) for t in tokens) if tokens else 0.0
         all_files.append((path, text, s))
 
-    # 4) PASS 2: apply intent heuristics deterministically (no linkage boosts)
+    # 4) PASS 2: apply intent heuristics deterministically (+ debug changed boost)
     hits: list[tuple[float, Path, str]] = []
     for path, text, s in all_files:
-        s = _apply_intent_boosts(s, path, intent, is_git_ok=is_git_ok, git_meta=git_meta)
+        s = _apply_intent_boosts(
+            s,
+            path,
+            intent,
+            is_git_ok=is_git_ok,
+            git_meta=git_meta,
+            changed_paths=changed_paths,  # NEW
+        )
         if s > 0:
             hits.append((s, path, text))
 
@@ -221,6 +303,8 @@ async def recommend_context(
         "query": query,
         "env": env,
         "git": git_meta,
+        # NEW: Context Diff Mode output (additive)
+        "recently_changed": recently_changed,
         "warnings": warnings,
         "recommended_files": recommended_files,
         "recommended_context": {
