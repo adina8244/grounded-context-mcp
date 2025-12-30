@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
-from ..server import mcp
+from .. import mcp
 from ..core.fs import iter_text_files
 from ..core.scoring import score_match
 

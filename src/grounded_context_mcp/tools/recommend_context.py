@@ -5,7 +5,7 @@ from typing import Literal
 
 from ..core.fs import iter_text_files, read_file_safe
 from ..core.scoring import score_match
-from ..server import mcp
+from .. import mcp
 from .env_specs import env_specs
 from .git_insights import git_insights
 

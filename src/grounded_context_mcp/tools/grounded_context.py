@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List
 
-from ..server import mcp
+from .. import mcp
 from ..core.fs import read_file_safe
 
 

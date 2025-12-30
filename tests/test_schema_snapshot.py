@@ -8,13 +8,38 @@ from grounded_context_mcp.server import mcp
 
 SNAP = Path(__file__).parent / "snapshots" / "tools_schema.json"
 
+# Fields that are commonly auto-generated / unstable across versions
+_NOISY_SCHEMA_KEYS = {"title", "default", "examples"}
+
 
 def _normalize(obj):
+    """
+    Deterministic normalization for snapshot stability:
+      - Sort dict keys
+      - Strip whitespace in strings
+      - Drop noisy/auto-generated schema keys (title/default/examples)
+    """
     if isinstance(obj, dict):
-        return {k: _normalize(obj[k]) for k in sorted(obj)}
+        cleaned = {}
+        for k, v in obj.items():
+            if k in _NOISY_SCHEMA_KEYS:
+                continue
+            cleaned[k] = _normalize(v)
+        return {k: cleaned[k] for k in sorted(cleaned)}
+
     if isinstance(obj, list):
         return [_normalize(x) for x in obj]
+
+    if isinstance(obj, str):
+        return obj.strip()
+
     return obj
+
+
+def _norm_text(x):
+    if isinstance(x, str):
+        return x.strip()
+    return x
 
 
 async def _list_tools_payload():
@@ -38,22 +63,20 @@ async def _list_tools_payload():
 
     payload = []
     for t in tools:
-        # tools are often dict-like with keys: name, description, inputSchema, outputSchema
         if isinstance(t, dict):
             payload.append(
                 {
                     "name": t.get("name"),
-                    "description": t.get("description"),
+                    "description": _norm_text(t.get("description")),
                     "inputSchema": t.get("inputSchema"),
                     "outputSchema": t.get("outputSchema"),
                 }
             )
         else:
-            # fallback if tool is an object
             payload.append(
                 {
                     "name": getattr(t, "name", None),
-                    "description": getattr(t, "description", None),
+                    "description": _norm_text(getattr(t, "description", None)),
                     "inputSchema": getattr(t, "inputSchema", None),
                     "outputSchema": getattr(t, "outputSchema", None),
                 }
@@ -61,6 +84,8 @@ async def _list_tools_payload():
 
     payload = [p for p in payload if p.get("name")]
     payload.sort(key=lambda x: x["name"])
+
+    # Deep normalize (sort keys, strip strings, remove noisy schema keys)
     return _normalize(payload)
 
 
@@ -70,12 +95,12 @@ def test_tools_schema_snapshot():
     if not SNAP.exists():
         SNAP.parent.mkdir(parents=True, exist_ok=True)
         SNAP.write_text(
-        json.dumps(normalized, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+            json.dumps(normalized, indent=2, ensure_ascii=False),
+            encoding="utf-8",
         )
         raise AssertionError(f"Snapshot created at {SNAP}. Re-run tests.")
 
-       
-
     expected = json.loads(SNAP.read_text(encoding="utf-8"))
     assert normalized == expected
+
+

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.git import run_git
-from ..server import mcp
+from .. import mcp
 
 
 def _parse_status_files(status_lines: list[str]) -> list[str]:

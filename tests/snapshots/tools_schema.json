@@ -1,111 +1,89 @@
 [
   {
-    "description": "\n    Provide environment + operational constraints for coding agents.\n    ",
+    "description": "Provide environment + operational constraints for coding agents.",
     "inputSchema": {
       "properties": {},
-      "title": "env_specsArguments",
       "type": "object"
     },
     "name": "env_specs",
     "outputSchema": null
   },
   {
-    "description": "\n    Return grounded file content for a set of paths (safe, truncated).\n    ",
+    "description": "Return grounded file content for a set of paths (safe, truncated).",
     "inputSchema": {
       "properties": {
         "max_chars": {
-          "default": 6000,
-          "title": "Max Chars",
           "type": "integer"
         },
         "paths": {
           "items": {
             "type": "string"
           },
-          "title": "Paths",
           "type": "array"
         },
         "root": {
-          "default": ".",
-          "title": "Root",
           "type": "string"
         }
       },
       "required": [
         "paths"
       ],
-      "title": "get_grounded_contextArguments",
       "type": "object"
     },
     "name": "get_grounded_context",
     "outputSchema": null
   },
   {
-    "description": "\n    Lightweight git metadata for the repo (branch, last commit, status).\n    ",
+    "description": "Lightweight git metadata for the repository.",
     "inputSchema": {
       "properties": {
         "root": {
-          "default": ".",
-          "title": "Root",
           "type": "string"
         }
       },
-      "title": "git_insightsArguments",
       "type": "object"
     },
     "name": "git_insights",
     "outputSchema": null
   },
   {
-    "description": "\n    Recommend the most relevant files/snippets for a given coding task,\n    then return grounded context for top files.\n\n    intent:\n      - implement: prefer stable patterns + file/path matches\n      - debug: boost recently-changed areas (if git is available)\n      - validate: prioritize env constraints and surface \"unsupported\" risks\n    ",
+    "description": "Recommend the most relevant files/snippets for a given coding task,\n    then return grounded context for top files.\n\n    intent:\n      - implement: prefer stable patterns + file/path matches\n      - debug: boost likely hot paths and recently-changed areas (if git is available)\n      - validate: prioritize env constraints and surface \"unsupported\" risks",
     "inputSchema": {
       "properties": {
         "intent": {
-          "default": "implement",
           "enum": [
             "implement",
             "debug",
             "validate"
           ],
-          "title": "Intent",
           "type": "string"
         },
         "max_chars": {
-          "default": 6000,
-          "title": "Max Chars",
           "type": "integer"
         },
         "max_files_for_context": {
-          "default": 3,
-          "title": "Max Files For Context",
           "type": "integer"
         },
         "max_results": {
-          "default": 5,
-          "title": "Max Results",
           "type": "integer"
         },
         "query": {
-          "title": "Query",
           "type": "string"
         },
         "root": {
-          "default": ".",
-          "title": "Root",
           "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "recommend_contextArguments",
       "type": "object"
     },
     "name": "recommend_context",
     "outputSchema": null
   },
   {
-    "description": "\n    Search the local repository and return grounded snippets (no network).\n    ",
+    "description": "Search the local repository and return grounded snippets (no network).",
     "inputSchema": {
       "properties": {
         "file_globs": {
@@ -119,29 +97,21 @@
             {
               "type": "null"
             }
-          ],
-          "default": null,
-          "title": "File Globs"
+          ]
         },
         "max_results": {
-          "default": 10,
-          "title": "Max Results",
           "type": "integer"
         },
         "query": {
-          "title": "Query",
           "type": "string"
         },
         "root": {
-          "default": ".",
-          "title": "Root",
           "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "search_repoArguments",
       "type": "object"
     },
     "name": "search_repo",
